@@ -1,5 +1,6 @@
 package com.monkey.miclockview;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
 import android.graphics.Camera;
@@ -14,6 +15,7 @@ import android.graphics.SweepGradient;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.animation.OvershootInterpolator;
 
 import java.util.Calendar;
 
@@ -22,7 +24,6 @@ import java.util.Calendar;
  */
 public class MiClockView extends View {
 
-    private Context mContext;
     /* 画布 */
     private Canvas mCanvas;
     /* 小时文本画笔 */
@@ -74,6 +75,8 @@ public class MiClockView extends View {
     /* 秒针角度 */
     private float mSecondDegree;
 
+    /* 加一个默认的padding值，为了防止用camera旋转时钟时造成四周超出view大小 */
+    private float mDefaultPadding;
     private float mPaddingLeft;
     private float mPaddingTop;
     private float mPaddingRight;
@@ -81,12 +84,18 @@ public class MiClockView extends View {
 
     /* 梯度扫描渐变 */
     private SweepGradient mSweepGradient;
-    /* 渐变矩阵 */
+    /* 渐变矩阵，作用在SweepGradient */
     private Matrix mGradientMatrix;
-    /* 触摸时矩阵 */
+    /* 触摸时作用在Camera的矩阵 */
     private Matrix mTouchMatrix;
-    /* 照相机 */
+    /* 照相机，用于旋转时钟实现3D效果 */
     private Camera mCamera;
+    /* camera绕X轴旋转的角度 */
+    private float mCameraRotateX;
+    /* camera绕Y轴旋转的角度 */
+    private float mCameraRotateY;
+    /* camera旋转的最大角度 */
+    private float mMaxCameraRotate = 10;
 
     public MiClockView(Context context) {
         this(context, null);
@@ -98,7 +107,6 @@ public class MiClockView extends View {
 
     public MiClockView(Context context, AttributeSet attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
-        mContext = context;
         TypedArray ta = context.obtainStyledAttributes(attrs, R.styleable.MiClockView, defStyleAttr, 0);
         mBackgroundColor = ta.getColor(R.styleable.MiClockView_backgroundColor, Color.parseColor("#237EAD"));
         setBackgroundColor(mBackgroundColor);
@@ -172,20 +180,25 @@ public class MiClockView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        mRadius = Math.min(w - getPaddingLeft() - getPaddingRight(), h - getPaddingTop() - getPaddingBottom()) / 2;
-        mPaddingLeft = w / 2 - mRadius + getPaddingLeft();
-        mPaddingTop = h / 2 - mRadius + getPaddingTop();
+        //宽和高分别去掉padding值，取min的一半即表盘的半径
+        mRadius = Math.min(w - getPaddingLeft() - getPaddingRight(),
+                h - getPaddingTop() - getPaddingBottom()) / 2;
+        mDefaultPadding = 0.12f * mRadius;
+        mPaddingLeft = mDefaultPadding + w / 2 - mRadius + getPaddingLeft();
+        mPaddingTop = mDefaultPadding + h / 2 - mRadius + getPaddingTop();
         mPaddingRight = mPaddingLeft;
         mPaddingBottom = mPaddingTop;
         mScaleLength = 0.12f * mRadius;
         mScaleLinePaint.setStrokeWidth(0.012f * mRadius);
         mScaleArcPaint.setStrokeWidth(mScaleLength);
-        mSweepGradient = new SweepGradient(w / 2, h / 2, new int[]{mDarkColor, mLightColor}, new float[]{0.75f, 1});
+        mSweepGradient = new SweepGradient(w / 2, h / 2,
+                new int[]{mDarkColor, mLightColor}, new float[]{0.75f, 1});
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         mCanvas = canvas;
+        setCameraRotate(mCameraRotateX, mCameraRotateY);
         getTimeDegree();
         drawTimeText();
         drawScaleLine();
@@ -193,7 +206,6 @@ public class MiClockView extends View {
         drawMinuteHand();
         drawSecondHand();
         drawCoverCircle();
-        set3D();
         invalidate();
     }
 
@@ -201,28 +213,85 @@ public class MiClockView extends View {
     public boolean onTouchEvent(MotionEvent event) {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
-                //TODO
+                getCameraRotate(event);
                 break;
             case MotionEvent.ACTION_MOVE:
-
+                //根据手指坐标计算camera应该旋转的大小
+                getCameraRotate(event);
                 break;
             case MotionEvent.ACTION_UP:
-
+                //松开手指，时钟复原并伴随晃动动画
+                ValueAnimator animX = getShakeAnim(mCameraRotateX, 0);
+                animX.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                        mCameraRotateX = (float) valueAnimator.getAnimatedValue();
+                    }
+                });
+                ValueAnimator animY = getShakeAnim(mCameraRotateY, 0);
+                animY.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                    @Override
+                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
+                        mCameraRotateY = (float) valueAnimator.getAnimatedValue();
+                    }
+                });
                 break;
         }
         return true;
     }
 
-    private void set3D() {
+    /**
+     * 获取camera旋转的大小
+     * 注意view坐标与camera坐标方向的转换
+     */
+    private void getCameraRotate(MotionEvent event) {
+        float rotateX = -(event.getY() - getHeight() / 2);
+        float rotateY = (event.getX() - getWidth() / 2);
+        //求出此时旋转的大小与半径之比
+        float percentX = rotateX / mRadius;
+        float percentY = rotateY / mRadius;
+        if (percentX > 1) {
+            percentX = 1;
+        } else if (percentX < -1) {
+            percentX = -1;
+        }
+        if (percentY > 1) {
+            percentY = 1;
+        } else if (percentY < -1) {
+            percentY = -1;
+        }
+        //最终旋转的大小按比例匀称改变
+        mCameraRotateX = percentX * mMaxCameraRotate;
+        mCameraRotateY = percentY * mMaxCameraRotate;
+    }
+
+    /**
+     * 设置3D时钟效果，触摸矩阵的相关设置、照相机的旋转大小
+     *
+     * @param rotateX 绕X轴旋转的大小
+     * @param rotateY 绕Y轴旋转的大小
+     */
+    private void setCameraRotate(float rotateX, float rotateY) {
         mTouchMatrix.reset();
         mCamera.save();
-        mCamera.rotateX(50);
-        mCamera.rotateY(80);
+        mCamera.rotateX(rotateX);
+        mCamera.rotateY(rotateY);
         mCamera.getMatrix(mTouchMatrix);
         mCamera.restore();
         mTouchMatrix.preTranslate(-getWidth() / 2, -getHeight() / 2);
         mTouchMatrix.postTranslate(getWidth() / 2, getHeight() / 2);
         mCanvas.concat(mTouchMatrix);
+    }
+
+    /**
+     * 时钟晃动动画
+     */
+    private ValueAnimator getShakeAnim(float start, float end) {
+        ValueAnimator anim = ValueAnimator.ofFloat(start, end);
+        anim.setInterpolator(new OvershootInterpolator(10));
+        anim.setDuration(500);
+        anim.start();
+        return anim;
     }
 
     /**
