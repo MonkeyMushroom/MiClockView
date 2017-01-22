@@ -96,6 +96,9 @@ public class MiClockView extends View {
     private float mCameraRotateY;
     /* camera旋转的最大角度 */
     private float mMaxCameraRotate = 10;
+    /* 手指松开时时钟晃动的动画 */
+    private ValueAnimator mShakeAnimX;
+    private ValueAnimator mShakeAnimY;
 
     public MiClockView(Context context) {
         this(context, null);
@@ -223,15 +226,15 @@ public class MiClockView extends View {
                 break;
             case MotionEvent.ACTION_UP:
                 //松开手指，时钟复原并伴随晃动动画
-                ValueAnimator animX = getShakeAnim(mCameraRotateX, 0);
-                animX.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                mShakeAnimX = getShakeAnim(mCameraRotateX, 0);
+                mShakeAnimX.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                     @Override
                     public void onAnimationUpdate(ValueAnimator valueAnimator) {
                         mCameraRotateX = (float) valueAnimator.getAnimatedValue();
                     }
                 });
-                ValueAnimator animY = getShakeAnim(mCameraRotateY, 0);
-                animY.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+                mShakeAnimY = getShakeAnim(mCameraRotateY, 0);
+                mShakeAnimY.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
                     @Override
                     public void onAnimationUpdate(ValueAnimator valueAnimator) {
                         mCameraRotateY = (float) valueAnimator.getAnimatedValue();
@@ -247,6 +250,10 @@ public class MiClockView extends View {
      * 注意view坐标与camera坐标方向的转换
      */
     private void getCameraRotate(MotionEvent event) {
+        if (mShakeAnimX != null && mShakeAnimX.isRunning()) {
+            mShakeAnimX.cancel();
+            mShakeAnimY.cancel();
+        }
         float rotateX = -(event.getY() - getHeight() / 2);
         float rotateY = (event.getX() - getWidth() / 2);
         //求出此时旋转的大小与半径之比
