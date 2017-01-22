@@ -87,7 +87,7 @@ public class MiClockView extends View {
     /* 渐变矩阵，作用在SweepGradient */
     private Matrix mGradientMatrix;
     /* 触摸时作用在Camera的矩阵 */
-    private Matrix mTouchMatrix;
+    private Matrix mCameraMatrix;
     /* 照相机，用于旋转时钟实现3D效果 */
     private Camera mCamera;
     /* camera绕X轴旋转的角度 */
@@ -153,7 +153,7 @@ public class MiClockView extends View {
         mSecondHandPath = new Path();
 
         mGradientMatrix = new Matrix();
-        mTouchMatrix = new Matrix();
+        mCameraMatrix = new Matrix();
         mCamera = new Camera();
     }
 
@@ -183,14 +183,16 @@ public class MiClockView extends View {
         //宽和高分别去掉padding值，取min的一半即表盘的半径
         mRadius = Math.min(w - getPaddingLeft() - getPaddingRight(),
                 h - getPaddingTop() - getPaddingBottom()) / 2;
-        mDefaultPadding = 0.12f * mRadius;
+        mDefaultPadding = 0.12f * mRadius;//根据比例确定默认padding大小
         mPaddingLeft = mDefaultPadding + w / 2 - mRadius + getPaddingLeft();
         mPaddingTop = mDefaultPadding + h / 2 - mRadius + getPaddingTop();
         mPaddingRight = mPaddingLeft;
         mPaddingBottom = mPaddingTop;
-        mScaleLength = 0.12f * mRadius;
-        mScaleLinePaint.setStrokeWidth(0.012f * mRadius);
+        mScaleLength = 0.12f * mRadius;//根据比例确定刻度线长度
         mScaleArcPaint.setStrokeWidth(mScaleLength);
+        mScaleLinePaint.setStrokeWidth(0.012f * mRadius);
+        //梯度扫描渐变，以(w/2,h/2)为中心点，两种起止颜色梯度渐变
+        //float数组表示，[0,0.75)为起始颜色所占比例，[0.75,1}为起止颜色渐变所占比例
         mSweepGradient = new SweepGradient(w / 2, h / 2,
                 new int[]{mDarkColor, mLightColor}, new float[]{0.75f, 1});
     }
@@ -198,13 +200,13 @@ public class MiClockView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         mCanvas = canvas;
-        setCameraRotate(mCameraRotateX, mCameraRotateY);
+        setCameraRotate();
         getTimeDegree();
         drawTimeText();
         drawScaleLine();
+        drawSecondHand();
         drawHourHand();
         drawMinuteHand();
-        drawSecondHand();
         drawCoverCircle();
         invalidate();
     }
@@ -267,20 +269,21 @@ public class MiClockView extends View {
 
     /**
      * 设置3D时钟效果，触摸矩阵的相关设置、照相机的旋转大小
-     *
-     * @param rotateX 绕X轴旋转的大小
-     * @param rotateY 绕Y轴旋转的大小
+     * 应用在绘制图形之前，否则无效
      */
-    private void setCameraRotate(float rotateX, float rotateY) {
-        mTouchMatrix.reset();
+    private void setCameraRotate() {
+        mCameraMatrix.reset();
         mCamera.save();
-        mCamera.rotateX(rotateX);
-        mCamera.rotateY(rotateY);
-        mCamera.getMatrix(mTouchMatrix);
+        mCamera.rotateX(mCameraRotateX);//绕x轴旋转角度
+        mCamera.rotateY(mCameraRotateY);//绕y轴旋转角度
+        mCamera.getMatrix(mCameraMatrix);//相关属性设置到matrix中
         mCamera.restore();
-        mTouchMatrix.preTranslate(-getWidth() / 2, -getHeight() / 2);
-        mTouchMatrix.postTranslate(getWidth() / 2, getHeight() / 2);
-        mCanvas.concat(mTouchMatrix);
+        //camera在view左上角那个点，故旋转默认是以左上角为中心旋转
+        //故在动作之前pre将matrix向左移动getWidth()/2长度，向上移动getHeight()/2长度
+        mCameraMatrix.preTranslate(-getWidth() / 2, -getHeight() / 2);
+        //在动作之后post再回到原位
+        mCameraMatrix.postTranslate(getWidth() / 2, getHeight() / 2);
+        mCanvas.concat(mCameraMatrix);//matrix与canvas相关联
     }
 
     /**
@@ -344,6 +347,7 @@ public class MiClockView extends View {
                 mPaddingTop + 1.5f * mScaleLength + mTextRect.height() / 2,
                 getWidth() - mPaddingRight - mTextRect.height() / 2 - 1.5f * mScaleLength,
                 getHeight() - mPaddingBottom - mTextRect.height() / 2 - 1.5f * mScaleLength);
+        //matrix默认会在三点钟方向开始颜色的渐变，为了吻合钟表十二点钟顺时针旋转的方向，把秒针旋转的角度减去90度
         mGradientMatrix.setRotate(mSecondDegree - 90, getWidth() / 2, getHeight() / 2);
         mSweepGradient.setLocalMatrix(mGradientMatrix);
         mScaleArcPaint.setShader(mSweepGradient);
@@ -359,7 +363,25 @@ public class MiClockView extends View {
     }
 
     /**
+     * 画秒针，根据不断变化的秒针角度旋转画布
+     */
+    private void drawSecondHand() {
+        mCanvas.save();
+        mCanvas.rotate(mSecondDegree, getWidth() / 2, getHeight() / 2);
+        mSecondHandPath.reset();
+        float offset = mPaddingTop + mTextRect.height() / 2;
+        mSecondHandPath.moveTo(getWidth() / 2, offset + 0.27f * mRadius);
+        mSecondHandPath.lineTo(getWidth() / 2 - 0.05f * mRadius, offset + 0.35f * mRadius);
+        mSecondHandPath.lineTo(getWidth() / 2 + 0.05f * mRadius, offset + 0.35f * mRadius);
+        mSecondHandPath.close();
+        mSecondHandPaint.setColor(mLightColor);
+        mCanvas.drawPath(mSecondHandPath, mSecondHandPaint);
+        mCanvas.restore();
+    }
+
+    /**
      * 画时针，根据不断变化的时针角度旋转画布
+     * 针头为圆弧状，使用二阶贝塞尔曲线
      */
     private void drawHourHand() {
         mCanvas.save();
@@ -391,23 +413,6 @@ public class MiClockView extends View {
         mMinuteHandPath.lineTo(getWidth() / 2 + 0.01f * mRadius, getHeight() / 2);
         mMinuteHandPath.close();
         mCanvas.drawPath(mMinuteHandPath, mMinuteHandPaint);
-        mCanvas.restore();
-    }
-
-    /**
-     * 画秒针，根据不断变化的秒针角度旋转画布
-     */
-    private void drawSecondHand() {
-        mCanvas.save();
-        mCanvas.rotate(mSecondDegree, getWidth() / 2, getHeight() / 2);
-        mSecondHandPath.reset();
-        float offset = mPaddingTop + mTextRect.height() / 2;
-        mSecondHandPath.moveTo(getWidth() / 2, offset + 0.27f * mRadius);
-        mSecondHandPath.lineTo(getWidth() / 2 - 0.05f * mRadius, offset + 0.35f * mRadius);
-        mSecondHandPath.lineTo(getWidth() / 2 + 0.05f * mRadius, offset + 0.35f * mRadius);
-        mSecondHandPath.close();
-        mSecondHandPaint.setColor(mLightColor);
-        mCanvas.drawPath(mSecondHandPath, mSecondHandPaint);
         mCanvas.restore();
     }
 
