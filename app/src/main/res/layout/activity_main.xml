@@ -12,7 +12,7 @@
         android:layout_height="wrap_content"
         android:layout_centerInParent="true"
         monkey:backgroundColor="#237EAD"
-        monkey:darkColor="#80ffffff"
+        monkey:darkColor="#72ACCA"
         monkey:lightColor="#ffffff"
         monkey:textSize="14sp" />
 </RelativeLayout>

@@ -1,5 +1,6 @@
 package com.monkey.miclockview;
 
+import android.animation.PropertyValuesHolder;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -33,7 +34,7 @@ public class MiClockView extends View {
     /* 小时圆圈画笔 */
     private Paint mCirclePaint;
     /* 小时圆圈线条宽度 */
-    private float mCircleStrokeWidth;
+    private float mCircleStrokeWidth = 2;
     /* 小时圆圈的外接矩形 */
     private RectF mCircleRectF;
     /* 刻度圆弧画笔 */
@@ -92,13 +93,15 @@ public class MiClockView extends View {
     private Camera mCamera;
     /* camera绕X轴旋转的角度 */
     private float mCameraRotateX;
+    private float mCanvasTranslateX;
     /* camera绕Y轴旋转的角度 */
     private float mCameraRotateY;
+    private float mCanvasTranslateY;
     /* camera旋转的最大角度 */
     private float mMaxCameraRotate = 10;
+    private float mMaxCanvasTranslate;
     /* 手指松开时时钟晃动的动画 */
-    private ValueAnimator mShakeAnimX;
-    private ValueAnimator mShakeAnimY;
+    private ValueAnimator mShakeAnim;
 
     public MiClockView(Context context) {
         this(context, null);
@@ -123,7 +126,6 @@ public class MiClockView extends View {
         mHourHandPaint.setColor(mDarkColor);
 
         mMinuteHandPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        mMinuteHandPaint.setStyle(Paint.Style.FILL);
         mMinuteHandPaint.setColor(mLightColor);
 
         mSecondHandPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -144,7 +146,6 @@ public class MiClockView extends View {
 
         mCirclePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         mCirclePaint.setStyle(Paint.Style.STROKE);
-        mCircleStrokeWidth = DensityUtils.dp2px(context, 1);
         mCirclePaint.setStrokeWidth(mCircleStrokeWidth);
         mCirclePaint.setColor(mDarkColor);
 
@@ -194,6 +195,7 @@ public class MiClockView extends View {
         mScaleLength = 0.12f * mRadius;//根据比例确定刻度线长度
         mScaleArcPaint.setStrokeWidth(mScaleLength);
         mScaleLinePaint.setStrokeWidth(0.012f * mRadius);
+        mMaxCanvasTranslate = 0.02f * mRadius;
         //梯度扫描渐变，以(w/2,h/2)为中心点，两种起止颜色梯度渐变
         //float数组表示，[0,0.75)为起始颜色所占比例，[0.75,1}为起止颜色渐变所占比例
         mSweepGradient = new SweepGradient(w / 2, h / 2,
@@ -210,7 +212,7 @@ public class MiClockView extends View {
         drawSecondHand();
         drawHourHand();
         drawMinuteHand();
-        drawCoverCircle();
+//        drawCoverCircle();
         invalidate();
     }
 
@@ -219,27 +221,16 @@ public class MiClockView extends View {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
                 getCameraRotate(event);
+                getCanvasTranslate(event);
                 break;
             case MotionEvent.ACTION_MOVE:
                 //根据手指坐标计算camera应该旋转的大小
                 getCameraRotate(event);
+                getCanvasTranslate(event);
                 break;
             case MotionEvent.ACTION_UP:
                 //松开手指，时钟复原并伴随晃动动画
-                mShakeAnimX = getShakeAnim(mCameraRotateX, 0);
-                mShakeAnimX.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                    @Override
-                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                        mCameraRotateX = (float) valueAnimator.getAnimatedValue();
-                    }
-                });
-                mShakeAnimY = getShakeAnim(mCameraRotateY, 0);
-                mShakeAnimY.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-                    @Override
-                    public void onAnimationUpdate(ValueAnimator valueAnimator) {
-                        mCameraRotateY = (float) valueAnimator.getAnimatedValue();
-                    }
-                });
+                startShakeAnim();
                 break;
         }
         return true;
@@ -248,17 +239,53 @@ public class MiClockView extends View {
     /**
      * 获取camera旋转的大小
      * 注意view坐标与camera坐标方向的转换
+     *
+     * @param event motionEvent
      */
     private void getCameraRotate(MotionEvent event) {
-        if (mShakeAnimX != null && mShakeAnimX.isRunning()) {
-            mShakeAnimX.cancel();
-            mShakeAnimY.cancel();
+        if (mShakeAnim != null && mShakeAnim.isRunning()) {
+            mShakeAnim.cancel();
         }
         float rotateX = -(event.getY() - getHeight() / 2);
         float rotateY = (event.getX() - getWidth() / 2);
         //求出此时旋转的大小与半径之比
-        float percentX = rotateX / mRadius;
-        float percentY = rotateY / mRadius;
+        float[] percentArr = getPercent(rotateX, rotateY);
+        //最终旋转的大小按比例匀称改变
+        mCameraRotateX = percentArr[0] * mMaxCameraRotate;
+        mCameraRotateY = percentArr[1] * mMaxCameraRotate;
+    }
+
+    /**
+     * 当拨动时钟时，会发现时针、分针、秒针和刻度盘会有一个较小的偏移量，形成近大远小的立体偏移效果
+     * 一开始我打算使用 matrix 和 camera 的 mCamera.translate(x, y, z) 方法改变 z 的值
+     * 但是并没有效果，所以就动态计算距离，然后在 onDraw()中分零件地 mCanvas.translate(x, y)
+     *
+     * @param event motionEvent
+     */
+    private void getCanvasTranslate(MotionEvent event) {
+        if (mShakeAnim != null && mShakeAnim.isRunning()) {
+            mShakeAnim.cancel();
+        }
+        float translateX = (event.getX() - getWidth() / 2);
+        float translateY = (event.getY() - getHeight() / 2);
+        //求出此时位移的大小与半径之比
+        float[] percentArr = getPercent(translateX, translateY);
+        //最终位移的大小按比例匀称改变
+        mCanvasTranslateX = percentArr[0] * mMaxCanvasTranslate;
+        mCanvasTranslateY = percentArr[1] * mMaxCanvasTranslate;
+    }
+
+    /**
+     * 获取一个操作旋转或位移大小的比例
+     *
+     * @param x x大小
+     * @param y y大小
+     * @return 装有xy比例的float数组
+     */
+    private float[] getPercent(float x, float y) {
+        float[] percentArr = new float[2];
+        float percentX = x / mRadius;
+        float percentY = y / mRadius;
         if (percentX > 1) {
             percentX = 1;
         } else if (percentX < -1) {
@@ -269,9 +296,9 @@ public class MiClockView extends View {
         } else if (percentY < -1) {
             percentY = -1;
         }
-        //最终旋转的大小按比例匀称改变
-        mCameraRotateX = percentX * mMaxCameraRotate;
-        mCameraRotateY = percentY * mMaxCameraRotate;
+        percentArr[0] = percentX;
+        percentArr[1] = percentY;
+        return percentArr;
     }
 
     /**
@@ -296,12 +323,33 @@ public class MiClockView extends View {
     /**
      * 时钟晃动动画
      */
-    private ValueAnimator getShakeAnim(float start, float end) {
-        ValueAnimator anim = ValueAnimator.ofFloat(start, end);
-        anim.setInterpolator(new OvershootInterpolator(10));
-        anim.setDuration(500);
-        anim.start();
-        return anim;
+    private void startShakeAnim() {
+        final String cameraRotateXName = "cameraRotateX";
+        final String cameraRotateYName = "cameraRotateY";
+        final String canvasTranslateXName = "canvasTranslateX";
+        final String canvasTranslateYName = "canvasTranslateY";
+        PropertyValuesHolder cameraRotateXHolder =
+                PropertyValuesHolder.ofFloat(cameraRotateXName, mCameraRotateX, 0);
+        PropertyValuesHolder cameraRotateYHolder =
+                PropertyValuesHolder.ofFloat(cameraRotateYName, mCameraRotateY, 0);
+        PropertyValuesHolder canvasTranslateXHolder =
+                PropertyValuesHolder.ofFloat(canvasTranslateXName, mCanvasTranslateX, 0);
+        PropertyValuesHolder canvasTranslateYHolder =
+                PropertyValuesHolder.ofFloat(canvasTranslateYName, mCanvasTranslateY, 0);
+        mShakeAnim = ValueAnimator.ofPropertyValuesHolder(cameraRotateXHolder,
+                cameraRotateYHolder, canvasTranslateXHolder, canvasTranslateYHolder);
+        mShakeAnim.setInterpolator(new OvershootInterpolator(10));
+        mShakeAnim.setDuration(500);
+        mShakeAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                mCameraRotateX = (float) animation.getAnimatedValue(cameraRotateXName);
+                mCameraRotateY = (float) animation.getAnimatedValue(cameraRotateYName);
+                mCanvasTranslateX = (float) animation.getAnimatedValue(canvasTranslateXName);
+                mCanvasTranslateY = (float) animation.getAnimatedValue(canvasTranslateYName);
+            }
+        });
+        mShakeAnim.start();
     }
 
     /**
@@ -350,6 +398,8 @@ public class MiClockView extends View {
      * 画一圈梯度渲染的亮暗色渐变圆弧，重绘时不断旋转，上面盖一圈背景色的刻度线
      */
     private void drawScaleLine() {
+        mCanvas.save();
+        mCanvas.translate(mCanvasTranslateX * 1.25f, mCanvasTranslateY * 1.25f);
         mScaleArcRectF.set(mPaddingLeft + 1.5f * mScaleLength + mTextRect.height() / 2,
                 mPaddingTop + 1.5f * mScaleLength + mTextRect.height() / 2,
                 getWidth() - mPaddingRight - mTextRect.height() / 2 - 1.5f * mScaleLength,
@@ -360,7 +410,6 @@ public class MiClockView extends View {
         mScaleArcPaint.setShader(mSweepGradient);
         mCanvas.drawArc(mScaleArcRectF, 0, 360, false, mScaleArcPaint);
         //画背景色刻度线
-        mCanvas.save();
         for (int i = 0; i < 200; i++) {
             mCanvas.drawLine(getWidth() / 2, mPaddingTop + mScaleLength + mTextRect.height() / 2,
                     getWidth() / 2, mPaddingTop + 2 * mScaleLength + mTextRect.height() / 2, mScaleLinePaint);
@@ -374,12 +423,13 @@ public class MiClockView extends View {
      */
     private void drawSecondHand() {
         mCanvas.save();
+        mCanvas.translate(mCanvasTranslateX * 1.25f, mCanvasTranslateY * 1.25f);
         mCanvas.rotate(mSecondDegree, getWidth() / 2, getHeight() / 2);
         mSecondHandPath.reset();
         float offset = mPaddingTop + mTextRect.height() / 2;
-        mSecondHandPath.moveTo(getWidth() / 2, offset + 0.27f * mRadius);
-        mSecondHandPath.lineTo(getWidth() / 2 - 0.05f * mRadius, offset + 0.35f * mRadius);
-        mSecondHandPath.lineTo(getWidth() / 2 + 0.05f * mRadius, offset + 0.35f * mRadius);
+        mSecondHandPath.moveTo(getWidth() / 2, offset + 0.26f * mRadius);
+        mSecondHandPath.lineTo(getWidth() / 2 - 0.05f * mRadius, offset + 0.34f * mRadius);
+        mSecondHandPath.lineTo(getWidth() / 2 + 0.05f * mRadius, offset + 0.34f * mRadius);
         mSecondHandPath.close();
         mSecondHandPaint.setColor(mLightColor);
         mCanvas.drawPath(mSecondHandPath, mSecondHandPaint);
@@ -392,16 +442,23 @@ public class MiClockView extends View {
      */
     private void drawHourHand() {
         mCanvas.save();
+        mCanvas.translate(mCanvasTranslateX * 1.5f, mCanvasTranslateY * 1.5f);
         mCanvas.rotate(mHourDegree, getWidth() / 2, getHeight() / 2);
         mHourHandPath.reset();
         float offset = mPaddingTop + mTextRect.height() / 2;
-        mHourHandPath.moveTo(getWidth() / 2 - 0.02f * mRadius, getHeight() / 2);
-        mHourHandPath.lineTo(getWidth() / 2 - 0.01f * mRadius, offset + 0.5f * mRadius);
-        mHourHandPath.quadTo(getWidth() / 2, offset + 0.48f * mRadius,
-                getWidth() / 2 + 0.01f * mRadius, offset + 0.5f * mRadius);
-        mHourHandPath.lineTo(getWidth() / 2 + 0.02f * mRadius, getHeight() / 2);
+        mHourHandPath.moveTo(getWidth() / 2 - 0.018f * mRadius, getHeight() / 2 - 0.03f * mRadius);
+        mHourHandPath.lineTo(getWidth() / 2 - 0.009f * mRadius, offset + 0.48f * mRadius);
+        mHourHandPath.quadTo(getWidth() / 2, offset + 0.46f * mRadius,
+                getWidth() / 2 + 0.009f * mRadius, offset + 0.48f * mRadius);
+        mHourHandPath.lineTo(getWidth() / 2 + 0.018f * mRadius, getHeight() / 2 - 0.03f * mRadius);
         mHourHandPath.close();
+        mHourHandPaint.setStyle(Paint.Style.FILL);
         mCanvas.drawPath(mHourHandPath, mHourHandPaint);
+        mCircleRectF.set(getWidth() / 2 - 0.03f * mRadius, getHeight() / 2 - 0.03f * mRadius,
+                getWidth() / 2 + 0.03f * mRadius, getHeight() / 2 + 0.03f * mRadius);
+        mHourHandPaint.setStyle(Paint.Style.STROKE);
+        mHourHandPaint.setStrokeWidth(0.01f * mRadius);
+        mCanvas.drawArc(mCircleRectF, 0, 360, false, mHourHandPaint);
         mCanvas.restore();
     }
 
@@ -410,25 +467,23 @@ public class MiClockView extends View {
      */
     private void drawMinuteHand() {
         mCanvas.save();
+        mCanvas.translate(mCanvasTranslateX * 2f, mCanvasTranslateY * 2f);
         mCanvas.rotate(mMinuteDegree, getWidth() / 2, getHeight() / 2);
         mMinuteHandPath.reset();
         float offset = mPaddingTop + mTextRect.height() / 2;
-        mMinuteHandPath.moveTo(getWidth() / 2 - 0.01f * mRadius, getHeight() / 2);
-        mMinuteHandPath.lineTo(getWidth() / 2 - 0.008f * mRadius, offset + 0.38f * mRadius);
-        mMinuteHandPath.quadTo(getWidth() / 2, offset + 0.36f * mRadius,
-                getWidth() / 2 + 0.008f * mRadius, offset + 0.38f * mRadius);
-        mMinuteHandPath.lineTo(getWidth() / 2 + 0.01f * mRadius, getHeight() / 2);
+        mMinuteHandPath.moveTo(getWidth() / 2 - 0.01f * mRadius, getHeight() / 2 - 0.03f * mRadius);
+        mMinuteHandPath.lineTo(getWidth() / 2 - 0.008f * mRadius, offset + 0.365f * mRadius);
+        mMinuteHandPath.quadTo(getWidth() / 2, offset + 0.345f * mRadius,
+                getWidth() / 2 + 0.008f * mRadius, offset + 0.365f * mRadius);
+        mMinuteHandPath.lineTo(getWidth() / 2 + 0.01f * mRadius, getHeight() / 2 - 0.03f * mRadius);
         mMinuteHandPath.close();
+        mMinuteHandPaint.setStyle(Paint.Style.FILL);
         mCanvas.drawPath(mMinuteHandPath, mMinuteHandPaint);
+        mCircleRectF.set(getWidth() / 2 - 0.03f * mRadius, getHeight() / 2 - 0.03f * mRadius,
+                getWidth() / 2 + 0.03f * mRadius, getHeight() / 2 + 0.03f * mRadius);
+        mMinuteHandPaint.setStyle(Paint.Style.STROKE);
+        mMinuteHandPaint.setStrokeWidth(0.02f * mRadius);
+        mCanvas.drawArc(mCircleRectF, 0, 360, false, mMinuteHandPaint);
         mCanvas.restore();
-    }
-
-    /**
-     * 画指针的连接圆圈，盖住指针path在圆心的连接线
-     */
-    private void drawCoverCircle() {
-        mCanvas.drawCircle(getWidth() / 2, getHeight() / 2, 0.05f * mRadius, mSecondHandPaint);
-        mSecondHandPaint.setColor(mBackgroundColor);
-        mCanvas.drawCircle(getWidth() / 2, getHeight() / 2, 0.025f * mRadius, mSecondHandPaint);
     }
 }
