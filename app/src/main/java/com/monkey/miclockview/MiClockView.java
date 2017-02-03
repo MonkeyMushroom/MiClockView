@@ -395,7 +395,7 @@ public class MiClockView extends View {
      */
     private void drawScaleLine() {
         mCanvas.save();
-        mCanvas.translate(mCanvasTranslateX * 1.25f, mCanvasTranslateY * 1.25f);
+        mCanvas.translate(mCanvasTranslateX, mCanvasTranslateY);
         mScaleArcRectF.set(mPaddingLeft + 1.5f * mScaleLength + mTextRect.height() / 2,
                 mPaddingTop + 1.5f * mScaleLength + mTextRect.height() / 2,
                 getWidth() - mPaddingRight - mTextRect.height() / 2 - 1.5f * mScaleLength,
@@ -419,7 +419,7 @@ public class MiClockView extends View {
      */
     private void drawSecondHand() {
         mCanvas.save();
-        mCanvas.translate(mCanvasTranslateX * 1.25f, mCanvasTranslateY * 1.25f);
+        mCanvas.translate(mCanvasTranslateX, mCanvasTranslateY);
         mCanvas.rotate(mSecondDegree, getWidth() / 2, getHeight() / 2);
         mSecondHandPath.reset();
         float offset = mPaddingTop + mTextRect.height() / 2;
@@ -438,7 +438,7 @@ public class MiClockView extends View {
      */
     private void drawHourHand() {
         mCanvas.save();
-        mCanvas.translate(mCanvasTranslateX * 1.5f, mCanvasTranslateY * 1.5f);
+        mCanvas.translate(mCanvasTranslateX * 1.2f, mCanvasTranslateY * 1.2f);
         mCanvas.rotate(mHourDegree, getWidth() / 2, getHeight() / 2);
         mHourHandPath.reset();
         float offset = mPaddingTop + mTextRect.height() / 2;
