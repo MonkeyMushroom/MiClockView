@@ -212,7 +212,6 @@ public class MiClockView extends View {
         drawSecondHand();
         drawHourHand();
         drawMinuteHand();
-//        drawCoverCircle();
         invalidate();
     }
 
@@ -220,6 +219,9 @@ public class MiClockView extends View {
     public boolean onTouchEvent(MotionEvent event) {
         switch (event.getAction()) {
             case MotionEvent.ACTION_DOWN:
+                if (mShakeAnim != null && mShakeAnim.isRunning()) {
+                    mShakeAnim.cancel();
+                }
                 getCameraRotate(event);
                 getCanvasTranslate(event);
                 break;
@@ -243,9 +245,6 @@ public class MiClockView extends View {
      * @param event motionEvent
      */
     private void getCameraRotate(MotionEvent event) {
-        if (mShakeAnim != null && mShakeAnim.isRunning()) {
-            mShakeAnim.cancel();
-        }
         float rotateX = -(event.getY() - getHeight() / 2);
         float rotateY = (event.getX() - getWidth() / 2);
         //求出此时旋转的大小与半径之比
@@ -263,9 +262,6 @@ public class MiClockView extends View {
      * @param event motionEvent
      */
     private void getCanvasTranslate(MotionEvent event) {
-        if (mShakeAnim != null && mShakeAnim.isRunning()) {
-            mShakeAnim.cancel();
-        }
         float translateX = (event.getX() - getWidth() / 2);
         float translateY = (event.getY() - getHeight() / 2);
         //求出此时位移的大小与半径之比
