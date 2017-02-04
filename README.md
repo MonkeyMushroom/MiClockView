@@ -8,4 +8,4 @@
 
 告诉你是怎样一步一步实现的~
 
-![image](https://github.com/MonkeyMushroom/MiClockView/raw/master/1.gif)
+![image](https://github.com/MonkeyMushroom/MiClockView/raw/master/2.gif)
