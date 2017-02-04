@@ -338,7 +338,7 @@ public class MiClockView extends View {
             @Override
             public float getInterpolation(float input) {
                 //http://inloop.github.io/interpolator/
-                float f = 0.569f;
+                float f = 0.571429f;
                 return (float) (Math.pow(2, -2 * input) * Math.sin((input - f / 4) * (2 * Math.PI) / f) + 1);
             }
         });
