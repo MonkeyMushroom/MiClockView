@@ -93,12 +93,15 @@ public class MiClockView extends View {
     private Camera mCamera;
     /* camera绕X轴旋转的角度 */
     private float mCameraRotateX;
-    private float mCanvasTranslateX;
     /* camera绕Y轴旋转的角度 */
     private float mCameraRotateY;
-    private float mCanvasTranslateY;
     /* camera旋转的最大角度 */
     private float mMaxCameraRotate = 10;
+    /* 指针的在x轴的位移 */
+    private float mCanvasTranslateX;
+    /* 指针的在y轴的位移 */
+    private float mCanvasTranslateY;
+    /* 指针的最大位移 */
     private float mMaxCanvasTranslate;
     /* 手指松开时时钟晃动的动画 */
     private ValueAnimator mShakeAnim;
@@ -457,6 +460,7 @@ public class MiClockView extends View {
         mHourHandPath.close();
         mHourHandPaint.setStyle(Paint.Style.FILL);
         mCanvas.drawPath(mHourHandPath, mHourHandPaint);
+
         mCircleRectF.set(getWidth() / 2 - 0.03f * mRadius, getHeight() / 2 - 0.03f * mRadius,
                 getWidth() / 2 + 0.03f * mRadius, getHeight() / 2 + 0.03f * mRadius);
         mHourHandPaint.setStyle(Paint.Style.STROKE);
@@ -482,6 +486,7 @@ public class MiClockView extends View {
         mMinuteHandPath.close();
         mMinuteHandPaint.setStyle(Paint.Style.FILL);
         mCanvas.drawPath(mMinuteHandPath, mMinuteHandPaint);
+
         mCircleRectF.set(getWidth() / 2 - 0.03f * mRadius, getHeight() / 2 - 0.03f * mRadius,
                 getWidth() / 2 + 0.03f * mRadius, getHeight() / 2 + 0.03f * mRadius);
         mMinuteHandPaint.setStyle(Paint.Style.STROKE);
