@@ -1,6 +1,7 @@
 package com.monkey.miclockview;
 
 import android.animation.PropertyValuesHolder;
+import android.animation.TimeInterpolator;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
@@ -16,7 +17,6 @@ import android.graphics.SweepGradient;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
-import android.view.animation.OvershootInterpolator;
 
 import java.util.Calendar;
 
@@ -334,8 +334,14 @@ public class MiClockView extends View {
                 PropertyValuesHolder.ofFloat(canvasTranslateYName, mCanvasTranslateY, 0);
         mShakeAnim = ValueAnimator.ofPropertyValuesHolder(cameraRotateXHolder,
                 cameraRotateYHolder, canvasTranslateXHolder, canvasTranslateYHolder);
-        mShakeAnim.setInterpolator(new OvershootInterpolator(10));
-        mShakeAnim.setDuration(500);
+        mShakeAnim.setInterpolator(new TimeInterpolator() {
+            @Override
+            public float getInterpolation(float input) {
+                float f = 0.569f;
+                return (float) (Math.pow(2, -2 * input) * Math.sin((input - f / 4) * (2 * Math.PI) / f) + 1);
+            }
+        });
+        mShakeAnim.setDuration(1000);
         mShakeAnim.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
             @Override
             public void onAnimationUpdate(ValueAnimator animation) {
