@@ -243,7 +243,6 @@ public class MiClockView extends View {
 
     /**
      * 获取camera旋转的大小
-     * 注意view坐标与camera坐标方向的转换
      *
      * @param event motionEvent
      */
