@@ -430,13 +430,15 @@ public class MiClockView extends View {
         mCanvas.save();
         mCanvas.translate(mCanvasTranslateX, mCanvasTranslateY);
         mCanvas.rotate(mSecondDegree, getWidth() / 2, getHeight() / 2);
-        mSecondHandPath.reset();
-        float offset = mPaddingTop + mTextRect.height() / 2;
-        mSecondHandPath.moveTo(getWidth() / 2, offset + 0.26f * mRadius);
-        mSecondHandPath.lineTo(getWidth() / 2 - 0.05f * mRadius, offset + 0.34f * mRadius);
-        mSecondHandPath.lineTo(getWidth() / 2 + 0.05f * mRadius, offset + 0.34f * mRadius);
-        mSecondHandPath.close();
-        mSecondHandPaint.setColor(mLightColor);
+        if (mSecondHandPath.isEmpty()) {
+            mSecondHandPath.reset();
+            float offset = mPaddingTop + mTextRect.height() / 2;
+            mSecondHandPath.moveTo(getWidth() / 2, offset + 0.26f * mRadius);
+            mSecondHandPath.lineTo(getWidth() / 2 - 0.05f * mRadius, offset + 0.34f * mRadius);
+            mSecondHandPath.lineTo(getWidth() / 2 + 0.05f * mRadius, offset + 0.34f * mRadius);
+            mSecondHandPath.close();
+            mSecondHandPaint.setColor(mLightColor);
+        }
         mCanvas.drawPath(mSecondHandPath, mSecondHandPaint);
         mCanvas.restore();
     }
@@ -449,14 +451,16 @@ public class MiClockView extends View {
         mCanvas.save();
         mCanvas.translate(mCanvasTranslateX * 1.2f, mCanvasTranslateY * 1.2f);
         mCanvas.rotate(mHourDegree, getWidth() / 2, getHeight() / 2);
-        mHourHandPath.reset();
-        float offset = mPaddingTop + mTextRect.height() / 2;
-        mHourHandPath.moveTo(getWidth() / 2 - 0.018f * mRadius, getHeight() / 2 - 0.03f * mRadius);
-        mHourHandPath.lineTo(getWidth() / 2 - 0.009f * mRadius, offset + 0.48f * mRadius);
-        mHourHandPath.quadTo(getWidth() / 2, offset + 0.46f * mRadius,
-                getWidth() / 2 + 0.009f * mRadius, offset + 0.48f * mRadius);
-        mHourHandPath.lineTo(getWidth() / 2 + 0.018f * mRadius, getHeight() / 2 - 0.03f * mRadius);
-        mHourHandPath.close();
+        if (mHourHandPath.isEmpty()) {
+            mHourHandPath.reset();
+            float offset = mPaddingTop + mTextRect.height() / 2;
+            mHourHandPath.moveTo(getWidth() / 2 - 0.018f * mRadius, getHeight() / 2 - 0.03f * mRadius);
+            mHourHandPath.lineTo(getWidth() / 2 - 0.009f * mRadius, offset + 0.48f * mRadius);
+            mHourHandPath.quadTo(getWidth() / 2, offset + 0.46f * mRadius,
+                    getWidth() / 2 + 0.009f * mRadius, offset + 0.48f * mRadius);
+            mHourHandPath.lineTo(getWidth() / 2 + 0.018f * mRadius, getHeight() / 2 - 0.03f * mRadius);
+            mHourHandPath.close();
+        }
         mHourHandPaint.setStyle(Paint.Style.FILL);
         mCanvas.drawPath(mHourHandPath, mHourHandPaint);
 
@@ -475,14 +479,16 @@ public class MiClockView extends View {
         mCanvas.save();
         mCanvas.translate(mCanvasTranslateX * 2f, mCanvasTranslateY * 2f);
         mCanvas.rotate(mMinuteDegree, getWidth() / 2, getHeight() / 2);
-        mMinuteHandPath.reset();
-        float offset = mPaddingTop + mTextRect.height() / 2;
-        mMinuteHandPath.moveTo(getWidth() / 2 - 0.01f * mRadius, getHeight() / 2 - 0.03f * mRadius);
-        mMinuteHandPath.lineTo(getWidth() / 2 - 0.008f * mRadius, offset + 0.365f * mRadius);
-        mMinuteHandPath.quadTo(getWidth() / 2, offset + 0.345f * mRadius,
-                getWidth() / 2 + 0.008f * mRadius, offset + 0.365f * mRadius);
-        mMinuteHandPath.lineTo(getWidth() / 2 + 0.01f * mRadius, getHeight() / 2 - 0.03f * mRadius);
-        mMinuteHandPath.close();
+        if (mMinuteHandPath.isEmpty()) {
+            mMinuteHandPath.reset();
+            float offset = mPaddingTop + mTextRect.height() / 2;
+            mMinuteHandPath.moveTo(getWidth() / 2 - 0.01f * mRadius, getHeight() / 2 - 0.03f * mRadius);
+            mMinuteHandPath.lineTo(getWidth() / 2 - 0.008f * mRadius, offset + 0.365f * mRadius);
+            mMinuteHandPath.quadTo(getWidth() / 2, offset + 0.345f * mRadius,
+                    getWidth() / 2 + 0.008f * mRadius, offset + 0.365f * mRadius);
+            mMinuteHandPath.lineTo(getWidth() / 2 + 0.01f * mRadius, getHeight() / 2 - 0.03f * mRadius);
+            mMinuteHandPath.close();
+        }
         mMinuteHandPaint.setStyle(Paint.Style.FILL);
         mCanvas.drawPath(mMinuteHandPath, mMinuteHandPaint);
 
